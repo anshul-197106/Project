@@ -1,0 +1,3 @@
+@echo off
+echo Starting SkillBridge Frontend and Backend...
+npm run start
