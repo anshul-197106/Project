@@ -148,3 +148,139 @@ class FreelancerListView(generics.ListAPIView):
         return Profile.objects.filter(
             user__is_freelancer=True
         ).select_related('user').order_by('-average_rating')
+
+
+# ===== ADMIN PANEL VIEWS =====
+
+class AdminDashboardView(APIView):
+    """Admin-only: platform-wide statistics."""
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        from gigs.models import Gig
+        from orders.models import Order
+        from django.db.models import Sum, Count
+
+        total_users = User.objects.count()
+        total_freelancers = User.objects.filter(is_freelancer=True).count()
+        total_buyers = User.objects.filter(is_buyer=True).count()
+        total_gigs = Gig.objects.count()
+        active_gigs = Gig.objects.filter(is_active=True).count()
+
+        all_orders = Order.objects.all()
+        total_orders = all_orders.count()
+        pending_orders = all_orders.filter(status='pending').count()
+        in_progress_orders = all_orders.filter(status='in_progress').count()
+        delivered_orders = all_orders.filter(status='delivered').count()
+        completed_orders = all_orders.filter(status='completed').count()
+        cancelled_orders = all_orders.filter(status='cancelled').count()
+
+        total_revenue = all_orders.filter(status='completed').aggregate(
+            total=Sum('amount'))['total'] or 0
+        total_platform_fees = all_orders.filter(status='completed').aggregate(
+            total=Sum('platform_fee'))['total'] or 0
+
+        return Response({
+            'total_users': total_users,
+            'total_freelancers': total_freelancers,
+            'total_buyers': total_buyers,
+            'total_gigs': total_gigs,
+            'active_gigs': active_gigs,
+            'total_orders': total_orders,
+            'pending_orders': pending_orders,
+            'in_progress_orders': in_progress_orders,
+            'delivered_orders': delivered_orders,
+            'completed_orders': completed_orders,
+            'cancelled_orders': cancelled_orders,
+            'total_revenue': float(total_revenue),
+            'total_platform_fees': float(total_platform_fees),
+        })
+
+
+class AdminOrdersView(APIView):
+    """Admin-only: view all orders and update their status."""
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        from orders.models import Order
+        from orders.serializers import OrderSerializer
+
+        status_filter = request.query_params.get('status', None)
+        orders = Order.objects.all().select_related('gig', 'buyer', 'gig__seller', 'gig__category')
+
+        if status_filter:
+            orders = orders.filter(status=status_filter)
+
+        orders = orders.order_by('-created_at')
+        serializer = OrderSerializer(orders, many=True)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        """Admin can update any order's status."""
+        from orders.models import Order
+        from django.utils import timezone
+
+        order_id = request.data.get('order_id')
+        new_status = request.data.get('status')
+
+        if not order_id or not new_status:
+            return Response({'error': 'order_id and status are required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        valid_statuses = ['pending', 'in_progress', 'delivered', 'completed', 'cancelled']
+        if new_status not in valid_statuses:
+            return Response({'error': f'Invalid status. Choose from: {valid_statuses}'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            order = Order.objects.get(id=order_id)
+        except Order.DoesNotExist:
+            return Response({'error': 'Order not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        old_status = order.status
+        order.status = new_status
+
+        if new_status == 'delivered' and not order.delivered_at:
+            order.delivered_at = timezone.now()
+
+        if new_status == 'completed' and old_status != 'completed':
+            gig = order.gig
+            gig.total_orders += 1
+            gig.save()
+            profile = gig.seller.profile
+            profile.total_orders_completed += 1
+            profile.total_earnings += order.amount
+            profile.save()
+
+        order.save()
+
+        return Response({
+            'message': f'Order #{order.id} status updated to {new_status}.',
+            'order_id': order.id,
+            'old_status': old_status,
+            'new_status': new_status,
+        })
+
+
+class AdminUsersView(APIView):
+    """Admin-only: view all users."""
+    permission_classes = [permissions.IsAdminUser]
+
+    def get(self, request):
+        users = User.objects.all().order_by('-date_joined')
+        data = []
+        for u in users:
+            profile = getattr(u, 'profile', None)
+            data.append({
+                'id': u.id,
+                'username': u.username,
+                'email': u.email,
+                'is_freelancer': u.is_freelancer,
+                'is_buyer': u.is_buyer,
+                'is_staff': u.is_staff,
+                'is_active': u.is_active,
+                'date_joined': u.date_joined,
+                'total_earnings': float(profile.total_earnings) if profile else 0,
+                'total_orders_completed': profile.total_orders_completed if profile else 0,
+            })
+        return Response(data)

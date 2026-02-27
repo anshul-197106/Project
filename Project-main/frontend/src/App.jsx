@@ -16,6 +16,8 @@ import SavedGigsPage from './pages/SavedGigsPage';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import StripeConnectPage from './pages/StripeConnectPage';
 import MessagesPage from './pages/MessagesPage';
+import CheckoutPage from './pages/CheckoutPage';
+import AdminPage from './pages/AdminPage';
 
 function App() {
   return (
@@ -40,6 +42,9 @@ function App() {
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/gigs" element={<GigListPage />} />
             <Route path="/gigs/:id" element={<GigDetailPage />} />
+            <Route path="/checkout/:id" element={
+              <ProtectedRoute><CheckoutPage /></ProtectedRoute>
+            } />
             <Route path="/gigs/new" element={
               <ProtectedRoute><CreateGigPage /></ProtectedRoute>
             } />
@@ -62,6 +67,9 @@ function App() {
               <ProtectedRoute><MessagesPage /></ProtectedRoute>
             } />
             <Route path="/profile/:id" element={<ProfilePage />} />
+            <Route path="/admin-panel" element={
+              <ProtectedRoute><AdminPage /></ProtectedRoute>
+            } />
           </Routes>
         </main>
         <Footer />

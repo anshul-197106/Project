@@ -27,6 +27,11 @@ export default function Navbar() {
                             <Link to="/messages">💬 Messages</Link>
                             <Link to="/gigs/new">Post a Gig</Link>
                             <Link to={`/profile/${user.id}`}>Profile</Link>
+                            {user.is_staff && (
+                                <Link to="/admin-panel" style={{ color: '#ff6b6b', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    🛡️ Admin
+                                </Link>
+                            )}
                             <button onClick={handleLogout}>Logout</button>
                         </>
                     ) : (

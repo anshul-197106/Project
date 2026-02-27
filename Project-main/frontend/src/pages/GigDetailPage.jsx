@@ -13,7 +13,6 @@ export default function GigDetailPage() {
     const [gig, setGig] = useState(null);
     const [reviews, setReviews] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [ordering, setOrdering] = useState(false);
     const [isSaved, setIsSaved] = useState(false);
     const [saving, setSaving] = useState(false);
 
@@ -33,25 +32,12 @@ export default function GigDetailPage() {
             .finally(() => setLoading(false));
     }, [id]);
 
-    const handleOrder = async () => {
+    const handleOrder = () => {
         if (!user) {
             navigate('/login');
             return;
         }
-        setOrdering(true);
-        try {
-            const res = await api.post('/orders/create-checkout-session/', { gig_id: gig.id, requirements: '' });
-            if (res.data.checkout_url) {
-                window.location.href = res.data.checkout_url;
-            } else {
-                toast.error('Failed to initiate checkout.');
-                setOrdering(false);
-            }
-        } catch (err) {
-            toast.error(err.response?.data?.error || 'Failed to initiate checkout');
-            setOrdering(false);
-        }
-        setOrdering(false);
+        navigate(`/checkout/${gig.id}`);
     };
 
     const handleSave = async () => {
@@ -64,7 +50,7 @@ export default function GigDetailPage() {
             const res = await api.post(`/gigs/${gig.id}/save/`);
             setIsSaved(res.data.is_saved);
             toast.success(res.data.message);
-        // eslint-disable-next-line no-unused-vars
+            // eslint-disable-next-line no-unused-vars
         } catch (err) {
             toast.error('Failed to toggle save');
         } finally {
@@ -192,10 +178,9 @@ export default function GigDetailPage() {
                                 <button
                                     className="btn btn-primary"
                                     onClick={handleOrder}
-                                    disabled={ordering}
                                     style={{ width: '100%', marginBottom: '8px' }}
                                 >
-                                    {ordering ? 'Placing Order...' : `Order Now — $${gig.price}`}
+                                    {`Order Now — $${gig.price}`}
                                 </button>
                                 <button
                                     className="btn btn-secondary"

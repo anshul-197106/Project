@@ -1,4 +1,6 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+/* eslint-disable react-hooks/set-state-in-effect */
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../api/axios';
 
 const AuthContext = createContext(null);
@@ -15,16 +17,16 @@ export function AuthProvider({ children }) {
         setLoading(false);
     }, []);
 
-    const login = async (email, password) => {
+    const login = useCallback(async (email, password) => {
         const res = await api.post('/auth/login/', { email, password });
         const { user: userData, tokens } = res.data;
         localStorage.setItem('user', JSON.stringify(userData));
         localStorage.setItem('tokens', JSON.stringify(tokens));
         setUser(userData);
         return userData;
-    };
+    }, []);
 
-    const register = async (username, email, password, password2, is_freelancer) => {
+    const register = useCallback(async (username, email, password, password2, is_freelancer) => {
         const res = await api.post('/auth/register/', {
             username, email, password, password2, is_freelancer,
         });
@@ -33,18 +35,18 @@ export function AuthProvider({ children }) {
         localStorage.setItem('tokens', JSON.stringify(tokens));
         setUser(userData);
         return userData;
-    };
+    }, []);
 
-    const logout = () => {
+    const logout = useCallback(() => {
         localStorage.removeItem('user');
         localStorage.removeItem('tokens');
         setUser(null);
-    };
+    }, []);
 
-    const updateUser = (userData) => {
+    const updateUser = useCallback((userData) => {
         localStorage.setItem('user', JSON.stringify(userData));
         setUser(userData);
-    };
+    }, []);
 
     return (
         <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>

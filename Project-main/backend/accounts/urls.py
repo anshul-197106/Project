@@ -10,4 +10,8 @@ urlpatterns = [
     path('profile/<int:user_id>/', views.PublicProfileView.as_view(), name='public_profile'),
     path('dashboard/', views.DashboardStatsView.as_view(), name='dashboard_stats'),
     path('freelancers/', views.FreelancerListView.as_view(), name='freelancer_list'),
+    # Admin endpoints
+    path('admin/dashboard/', views.AdminDashboardView.as_view(), name='admin_dashboard'),
+    path('admin/orders/', views.AdminOrdersView.as_view(), name='admin_orders'),
+    path('admin/users/', views.AdminUsersView.as_view(), name='admin_users'),
 ]

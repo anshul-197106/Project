@@ -13,6 +13,7 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'gig', 'gig_detail', 'buyer', 'buyer_detail',
             'status', 'requirements', 'amount',
+            'submission_file', 'github_link', 'submission_note',
             'created_at', 'updated_at', 'delivered_at',
         ]
         read_only_fields = ['buyer', 'amount', 'delivered_at']

@@ -7,7 +7,8 @@ import toast from 'react-hot-toast';
 import {
     FaShoppingBag, FaStore, FaChartLine, FaBoxOpen,
     FaStar, FaClock, FaCheckCircle, FaWallet,
-    FaPlus, FaCreditCard, FaRocket
+    FaPlus, FaCreditCard, FaRocket,
+    FaFilePdf, FaGithub, FaTimes, FaCloudUploadAlt, FaStickyNote
 } from 'react-icons/fa';
 
 export default function DashboardPage() {
@@ -18,6 +19,15 @@ export default function DashboardPage() {
     const [purchases, setPurchases] = useState([]); // Orders as buyer
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(user?.is_freelancer ? 'seller' : 'buyer');
+
+    // Submission modal state
+    const [showSubmitModal, setShowSubmitModal] = useState(false);
+    const [submitOrderId, setSubmitOrderId] = useState(null);
+    const [submitOrderTitle, setSubmitOrderTitle] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+    const [submitFile, setSubmitFile] = useState(null);
+    const [submitGithub, setSubmitGithub] = useState('');
+    const [submitNote, setSubmitNote] = useState('');
 
     useEffect(() => {
         const fetchData = async () => {
@@ -63,7 +73,49 @@ export default function DashboardPage() {
         }
     };
 
+    const openSubmitModal = (orderId, orderTitle) => {
+        setSubmitOrderId(orderId);
+        setSubmitOrderTitle(orderTitle);
+        setSubmitFile(null);
+        setSubmitGithub('');
+        setSubmitNote('');
+        setShowSubmitModal(true);
+    };
+
+    const handleSubmitDelivery = async (e) => {
+        e.preventDefault();
+        if (!submitFile && !submitGithub.trim()) {
+            toast.error('Please upload a PDF or provide a GitHub link.');
+            return;
+        }
+        setSubmitting(true);
+        try {
+            const formData = new FormData();
+            if (submitFile) formData.append('submission_file', submitFile);
+            if (submitGithub.trim()) formData.append('github_link', submitGithub.trim());
+            if (submitNote.trim()) formData.append('submission_note', submitNote.trim());
+
+            await api.post(`/orders/${submitOrderId}/submit-delivery/`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            toast.success('Work submitted successfully!');
+            setShowSubmitModal(false);
+            // Refresh orders
+            const [sellerRes, buyerRes] = await Promise.all([
+                api.get('/orders/?role=seller'),
+                api.get('/orders/?role=buyer'),
+            ]);
+            setOrders(sellerRes.data.results || sellerRes.data);
+            setPurchases(buyerRes.data.results || buyerRes.data);
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'Failed to submit delivery');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     const statusColors = {
+        payment_pending: { bg: 'rgba(255, 193, 7, 0.05)', color: '#e0a800', label: 'Awaiting Payment' },
         pending: { bg: 'rgba(255, 193, 7, 0.1)', color: '#ffc107', label: 'Pending' },
         in_progress: { bg: 'rgba(0, 123, 255, 0.1)', color: '#007bff', label: 'In Progress' },
         delivered: { bg: 'rgba(23, 162, 184, 0.1)', color: '#17a2b8', label: 'Delivered' },
@@ -137,10 +189,10 @@ export default function DashboardPage() {
                                         </td>
                                         <td style={{ padding: '20px 24px', textAlign: 'right' }}>
                                             {order.status === 'pending' && (
-                                                <button className="btn btn-primary btn-sm" onClick={() => updateOrderStatus(order.id, 'in_progress')}>Start Project</button>
+                                                <button className="btn btn-primary btn-sm" onClick={() => openSubmitModal(order.id, order.gig_detail?.title)}>Submission</button>
                                             )}
                                             {order.status === 'in_progress' && (
-                                                <button className="btn btn-primary btn-sm" onClick={() => updateOrderStatus(order.id, 'delivered')}>Deliver Now</button>
+                                                <button className="btn btn-primary btn-sm" onClick={() => openSubmitModal(order.id, order.gig_detail?.title)}>Deliver Now</button>
                                             )}
                                         </td>
                                     </tr>
@@ -246,10 +298,22 @@ export default function DashboardPage() {
                                             </span>
                                         </td>
                                         <td style={{ padding: '20px 24px', textAlign: 'right' }}>
-                                            <Link to="/messages" className="btn btn-secondary btn-sm" style={{ marginRight: '8px' }}>Chat</Link>
-                                            {order.status === 'delivered' && (
-                                                <button className="btn btn-primary btn-sm" onClick={() => updateOrderStatus(order.id, 'completed')}>Accept Delivery</button>
-                                            )}
+                                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                                                {order.submission_file && (
+                                                    <a href={order.submission_file} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                        <FaFilePdf style={{ color: '#e74c3c' }} /> PDF
+                                                    </a>
+                                                )}
+                                                {order.github_link && (
+                                                    <a href={order.github_link} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                        <FaGithub /> GitHub
+                                                    </a>
+                                                )}
+                                                <Link to="/messages" className="btn btn-secondary btn-sm">Chat</Link>
+                                                {order.status === 'delivered' && (
+                                                    <button className="btn btn-primary btn-sm" onClick={() => updateOrderStatus(order.id, 'completed')}>Accept Delivery</button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -352,6 +416,233 @@ export default function DashboardPage() {
 
             {/* Dashboard Content */}
             {activeTab === 'seller' ? <SellerDashboard /> : <BuyerDashboard />}
+
+            {/* ===== SUBMISSION MODAL ===== */}
+            {showSubmitModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(8px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    zIndex: 9999, padding: '20px',
+                }} onClick={() => !submitting && setShowSubmitModal(false)}>
+                    <div
+                        className="card fade-in"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            width: '100%', maxWidth: '560px', padding: '36px',
+                            position: 'relative', maxHeight: '90vh', overflowY: 'auto',
+                            border: '1px solid rgba(108, 99, 255, 0.2)',
+                            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.5)',
+                        }}
+                    >
+                        {/* Close button */}
+                        <button
+                            onClick={() => !submitting && setShowSubmitModal(false)}
+                            style={{
+                                position: 'absolute', top: '16px', right: '16px',
+                                background: 'none', border: 'none', color: 'var(--text-muted)',
+                                fontSize: '1.2rem', cursor: 'pointer', padding: '4px',
+                            }}
+                        >
+                            <FaTimes />
+                        </button>
+
+                        {/* Header */}
+                        <div style={{ marginBottom: '28px' }}>
+                            <h2 style={{
+                                fontSize: '1.5rem', fontWeight: '900', marginBottom: '8px',
+                                background: 'var(--accent-gradient)',
+                                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                            }}>
+                                📦 Submit Your Work
+                            </h2>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: '1.5' }}>
+                                Deliver your work for <strong style={{ color: 'var(--text-primary)' }}>{submitOrderTitle}</strong>.
+                                Upload a PDF report and/or share your GitHub repository link.
+                            </p>
+                        </div>
+
+                        <form onSubmit={handleSubmitDelivery}>
+                            {/* PDF Upload */}
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    fontSize: '0.85rem', fontWeight: '700', marginBottom: '10px',
+                                    color: 'var(--text-primary)',
+                                }}>
+                                    <FaFilePdf style={{ color: '#e74c3c' }} /> Upload PDF Report
+                                </label>
+                                <div
+                                    style={{
+                                        border: `2px dashed ${submitFile ? 'var(--success)' : 'var(--border-color)'}`,
+                                        borderRadius: '16px',
+                                        padding: '28px',
+                                        textAlign: 'center',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s ease',
+                                        background: submitFile ? 'rgba(40, 167, 69, 0.05)' : 'rgba(255, 255, 255, 0.01)',
+                                    }}
+                                    onClick={() => document.getElementById('pdf-upload').click()}
+                                >
+                                    <input
+                                        type="file"
+                                        id="pdf-upload"
+                                        accept=".pdf"
+                                        style={{ display: 'none' }}
+                                        onChange={(e) => {
+                                            const file = e.target.files[0];
+                                            if (file) {
+                                                if (!file.name.toLowerCase().endsWith('.pdf')) {
+                                                    toast.error('Only PDF files are accepted');
+                                                    return;
+                                                }
+                                                if (file.size > 10 * 1024 * 1024) {
+                                                    toast.error('File size must be under 10MB');
+                                                    return;
+                                                }
+                                                setSubmitFile(file);
+                                            }
+                                        }}
+                                    />
+                                    {submitFile ? (
+                                        <div>
+                                            <FaCheckCircle style={{ fontSize: '2rem', color: 'var(--success)', marginBottom: '10px' }} />
+                                            <div style={{ fontWeight: '700', fontSize: '0.9rem', marginBottom: '4px' }}>
+                                                {submitFile.name}
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                {(submitFile.size / 1024).toFixed(1)} KB • Click to change
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <FaCloudUploadAlt style={{ fontSize: '2.5rem', color: 'var(--text-muted)', marginBottom: '10px', opacity: 0.5 }} />
+                                            <div style={{ fontWeight: '600', fontSize: '0.9rem', marginBottom: '4px' }}>
+                                                Click to upload PDF
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                Max 10MB • PDF files only
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* GitHub Link */}
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    fontSize: '0.85rem', fontWeight: '700', marginBottom: '10px',
+                                    color: 'var(--text-primary)',
+                                }}>
+                                    <FaGithub /> GitHub Repository Link
+                                </label>
+                                <input
+                                    type="url"
+                                    placeholder="https://github.com/username/repository"
+                                    value={submitGithub}
+                                    onChange={(e) => setSubmitGithub(e.target.value)}
+                                    style={{
+                                        width: '100%', padding: '14px 16px', borderRadius: '12px',
+                                        border: '1px solid var(--border-color)',
+                                        background: 'var(--bg-secondary)', color: 'var(--text-primary)',
+                                        fontSize: '0.9rem', outline: 'none',
+                                        transition: 'border-color 0.3s ease',
+                                    }}
+                                    onFocus={(e) => e.target.style.borderColor = 'var(--accent-primary)'}
+                                    onBlur={(e) => e.target.style.borderColor = 'var(--border-color)'}
+                                />
+                            </div>
+
+                            {/* Notes */}
+                            <div style={{ marginBottom: '28px' }}>
+                                <label style={{
+                                    display: 'flex', alignItems: 'center', gap: '8px',
+                                    fontSize: '0.85rem', fontWeight: '700', marginBottom: '10px',
+                                    color: 'var(--text-primary)',
+                                }}>
+                                    <FaStickyNote style={{ color: 'var(--accent-secondary)' }} /> Additional Notes
+                                    <span style={{ fontWeight: '400', color: 'var(--text-muted)', fontSize: '0.75rem' }}>(optional)</span>
+                                </label>
+                                <textarea
+                                    placeholder="Any additional instructions or notes for the buyer..."
+                                    value={submitNote}
+                                    onChange={(e) => setSubmitNote(e.target.value)}
+                                    rows={3}
+                                    style={{
+                                        width: '100%', padding: '14px 16px', borderRadius: '12px',
+                                        border: '1px solid var(--border-color)',
+                                        background: 'var(--bg-secondary)', color: 'var(--text-primary)',
+                                        fontSize: '0.9rem', resize: 'vertical', fontFamily: 'inherit',
+                                        outline: 'none', transition: 'border-color 0.3s ease',
+                                    }}
+                                    onFocus={(e) => e.target.style.borderColor = 'var(--accent-primary)'}
+                                    onBlur={(e) => e.target.style.borderColor = 'var(--border-color)'}
+                                />
+                            </div>
+
+                            {/* Info Badge */}
+                            <div style={{
+                                background: 'rgba(108, 99, 255, 0.06)',
+                                borderRadius: '12px', padding: '14px 16px',
+                                border: '1px solid rgba(108, 99, 255, 0.12)',
+                                marginBottom: '24px', fontSize: '0.78rem',
+                                color: 'var(--text-muted)', lineHeight: '1.5',
+                            }}>
+                                💡 You must provide at least a <strong>PDF file</strong> or a <strong>GitHub link</strong>.
+                                Once submitted, the buyer will review your delivery and can accept or request revisions.
+                            </div>
+
+                            {/* Actions */}
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => setShowSubmitModal(false)}
+                                    disabled={submitting}
+                                    style={{ flex: 1, padding: '14px' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary"
+                                    disabled={submitting || (!submitFile && !submitGithub.trim())}
+                                    style={{
+                                        flex: 2, padding: '14px', fontWeight: '800',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                                        opacity: (!submitFile && !submitGithub.trim()) ? 0.5 : 1,
+                                    }}
+                                >
+                                    {submitting ? (
+                                        <>
+                                            <div style={{
+                                                width: '16px', height: '16px', borderRadius: '50%',
+                                                border: '2px solid rgba(255,255,255,0.3)',
+                                                borderTopColor: '#fff',
+                                                animation: 'spin 0.8s linear infinite',
+                                            }} />
+                                            Submitting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FaCloudUploadAlt /> Submit Delivery
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal animation keyframes */}
+            <style>{`
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
         </div>
     );
 }
